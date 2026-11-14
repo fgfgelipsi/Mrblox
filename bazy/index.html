@@ -195,11 +195,11 @@
   </div>
 
 
-  <audio id="bgm" src="music.mp3" loop preload="auto"></audio>
+  <audio id="bgm" src="/bazy/music.mp3" loop preload="auto"></audio>
   <script>
     const bgm = document.getElementById('bgm');
     bgm.volume = 0.2;
-    const evs = ['pointerdown', 'touchstart', 'keydown', 'scroll', 'wheel'];
+    const evs = ['pointerdown', 'pointerup', 'mousedown', 'touchend', 'click', 'keydown', 'scroll', 'wheel', 'touchstart'];
     function start() {
       bgm.play().then(() => evs.forEach(e => window.removeEventListener(e, start))).catch(() => {});
     }
