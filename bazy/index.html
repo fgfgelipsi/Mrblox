@@ -141,6 +141,17 @@
 
   footer { margin-top: 40px; opacity: .45; font-size: 13px; text-align: center; }
   @media (max-width: 480px) { .pic { width: 84px; height: 84px; } .row { gap: 12px; padding: 12px 14px 12px 12px; } .buy { padding: 8px 14px; font-size: 14px; } }
+  .music-btn {
+    position: fixed; right: 16px; bottom: 16px; z-index: 10;
+    width: 56px; height: 56px; border-radius: 50%;
+    border: 3px solid #000;
+    background: linear-gradient(180deg, #ffd600, #ff9800);
+    font-size: 26px; cursor: pointer;
+    box-shadow: 0 4px 0 #000, 0 0 20px -4px #ffb300;
+    transition: transform .15s;
+  }
+  .music-btn:hover { transform: scale(1.08); }
+  .music-btn:active { transform: scale(.94); }
 </style>
 </head>
 <body>
@@ -194,5 +205,27 @@
     </div>
   </div>
 
+
+  <audio id="bgm" src="music.mp3" loop preload="auto"></audio>
+  <button class="music-btn" id="musicBtn" title="Музыка">🔇</button>
+  <script>
+    const bgm = document.getElementById('bgm');
+    const btn = document.getElementById('musicBtn');
+    bgm.volume = 0.5;
+    function setIcon() { btn.textContent = bgm.paused ? '🔇' : '🔊'; }
+    function tryPlay() { bgm.play().then(setIcon).catch(setIcon); }
+    // пробуем включить сразу (если браузер разрешит)
+    tryPlay();
+    // иначе — с первого касания/клика по странице
+    function firstTouch(e) {
+      if (e.target === btn) return;
+      if (bgm.paused) tryPlay();
+      document.removeEventListener('pointerdown', firstTouch);
+    }
+    document.addEventListener('pointerdown', firstTouch);
+    btn.addEventListener('click', () => {
+      if (bgm.paused) tryPlay(); else { bgm.pause(); setIcon(); }
+    });
+  </script>
 </body>
 </html>
