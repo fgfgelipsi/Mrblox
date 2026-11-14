@@ -198,7 +198,9 @@ textarea.field{resize:vertical;min-height:96px}
 .codelist li.empty{display:block;color:var(--frost);font-size:14px;text-align:center}
 .codelist b{font-family:var(--display);font-size:14px;letter-spacing:.04em;color:var(--gold);overflow-wrap:anywhere}
 .codelist span{grid-column:1;font-size:13px;color:var(--frost);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}
-.del{grid-row:1/3;grid-column:2;background:transparent;border:1px solid rgba(232,54,77,.55);color:#ff8a9a;font:700 13px/1 var(--body);padding:9px 12px;border-radius:10px;cursor:pointer;white-space:nowrap}
+.codelist .uses{grid-column:1;font-style:normal;font-size:12px;font-weight:700;color:#7ee2a8}
+.codelist .uses.done{color:#ff8a9a}
+.del{grid-row:1/4;grid-column:2;background:transparent;border:1px solid rgba(232,54,77,.55);color:#ff8a9a;font:700 13px/1 var(--body);padding:9px 12px;border-radius:10px;cursor:pointer;white-space:nowrap}
 .del.armed{background:var(--red);border-color:var(--red);color:#fff}
 #logout{justify-self:start}
 footer{margin-top:40px;text-align:center;font-size:12px;color:rgba(159,195,234,.6)}
@@ -351,6 +353,8 @@ footer{margin-top:40px;text-align:center;font-size:12px;color:rgba(159,195,234,.
       </div>
       <label for="newMsg">Сообщение, которое увидят при вводе кода</label>
       <textarea class="field plain" id="newMsg" rows="4" maxlength="1000"></textarea>
+      <label for="newMax">Сколько раз можно активировать</label>
+      <input class="field plain" id="newMax" type="number" inputmode="numeric" min="1" max="1000000" step="1" placeholder="Пусто — без ограничений">
       <button class="buy" type="submit">Создать код</button>
     </form>
     <div id="createStatus" class="status" role="status"></div>
@@ -450,19 +454,29 @@ footer{margin-top:40px;text-align:center;font-size:12px;color:rgba(159,195,234,.
       return r.json();
     }
     return {
-      get:async h=>(await call('GET','?h='+h)).doc,
-      list:async()=>(await call('GET','')).docs||[],
+      redeem:h=>call('GET','?h='+h),
+      list:async()=>{const r=await call('GET','');return {docs:r.docs||[],used:r.used||{}}},
       put:(h,doc)=>call('POST','',{h,doc}),
       del:h=>call('DELETE','?h='+h)
     };
   }
   function dbStore(db){
-    const col=db.collection('codes');
+    const col=db.collection('codes'),uses=db.collection('uses');
     return {
-      get:async h=>{const s=await col.doc(h).get();return s.exists?s.data():null},
-      list:async()=>(await col.get()).docs.map(d=>d.data()),
-      put:(h,doc)=>col.doc(h).set(doc),
-      del:h=>col.doc(h).delete()
+      redeem:async h=>{
+        const s=await col.doc(h).get();if(!s.exists)return {doc:null};
+        const d=s.data(),max=d.max|0,u=await uses.doc(h).get(),used=(u.exists&&u.data().n)|0;
+        if(max>0&&used>=max)return {doc:null,exhausted:true};
+        try{await uses.doc(h).set({n:used+1})}catch(e){}
+        return {doc:d,used:used+1,max};
+      },
+      list:async()=>{
+        const [a,b]=await Promise.all([col.get(),uses.get()]);const used={};
+        b.docs.forEach(x=>used[x.id]=x.data().n|0);
+        return {docs:a.docs.map(d=>d.data()),used};
+      },
+      put:async(h,doc)=>{await col.doc(h).set(doc);try{await uses.doc(h).delete()}catch(e){}},
+      del:async h=>{await col.doc(h).delete();try{await uses.doc(h).delete()}catch(e){}}
     };
   }
   function store(){
@@ -498,6 +512,11 @@ footer{margin-top:40px;text-align:center;font-size:12px;color:rgba(159,195,234,.
     });
   }
 
+  // codes this device already activated (so a reload doesn't spend another activation)
+  function readMine(){try{return JSON.parse(localStorage.getItem('mrblox-mine')||'{}')||{}}catch(e){return {}}}
+  function saveMine(m){try{localStorage.setItem('mrblox-mine',JSON.stringify(m))}catch(e){}}
+  function showGift(code,msg){$('giftCode').textContent=code;linkify($('giftMsg'),msg);$('giftCard').hidden=false}
+
   // redeem
   const rForm=$('redeemForm'),rIn=$('redeemInput'),rStat=$('redeemStatus'),gift=$('giftCard');
   let busy=false;
@@ -506,13 +525,18 @@ footer{margin-top:40px;text-align:center;font-size:12px;color:rgba(159,195,234,.
     const code=norm(rIn.value);
     if(!code){setStatus(rStat,'Сначала введи код.','err');shake(rForm);return}
     if(!window.crypto||!crypto.subtle){setStatus(rStat,'Промокоды работают только на сайте в интернете, а не в открытом файле.','err');return}
-    busy=true;gift.hidden=true;setStatus(rStat,'Проверяем код…');
+    gift.hidden=true;
+    const mine=readMine();
+    if(mine[code]){showGift(code,mine[code]);setStatus(rStat,'Ты уже активировал этот код.','ok');return}
+    busy=true;setStatus(rStat,'Проверяем код…');
     try{
-      const st=await store();const doc=await st.get(await idOf(code));
-      if(!doc){setStatus(rStat,'Такого кода нет. Проверь, правильно ли он написан.','err');shake(rForm);return}
-      const msg=await unseal(await keyFrom(code,'mrblox-code'),doc.iv,doc.ct);
-      $('giftCode').textContent=code;linkify($('giftMsg'),msg);
-      setStatus(rStat,'');gift.hidden=false;
+      const st=await store();const r=await st.redeem(await idOf(code));
+      if(r.exhausted){setStatus(rStat,'У этого кода закончились активации.','err');shake(rForm);return}
+      if(!r.doc){setStatus(rStat,'Такого кода нет. Проверь, правильно ли он написан.','err');shake(rForm);return}
+      const msg=await unseal(await keyFrom(code,'mrblox-code'),r.doc.iv,r.doc.ct);
+      mine[code]=msg;saveMine(mine);
+      showGift(code,msg);
+      setStatus(rStat,r.max>0?'Осталось активаций: '+Math.max(0,r.max-r.used)+' из '+r.max+'.':'','ok');
       if(window.burstSnow)window.burstSnow();
     }catch(err){setStatus(rStat,errText(err,false),'err')}
     finally{busy=false}
@@ -559,10 +583,10 @@ footer{margin-top:40px;text-align:center;font-size:12px;color:rgba(159,195,234,.
     const list=$('codeList');
     list.innerHTML='<li class="empty">Загружаем коды…</li>';$('codeCount').textContent='';
     try{
-      const st=await store();const docs=await st.list();
+      const st=await store();const {docs,used}=await st.list();
       const out=[];
       for(const d of docs){
-        try{const x=JSON.parse(await unseal(adminKey,d.aiv,d.act));out.push({h:d.h,t:d.t||0,code:x.code,msg:x.msg})}catch(e){}
+        try{const x=JSON.parse(await unseal(adminKey,d.aiv,d.act));out.push({h:d.h,t:d.t||0,code:x.code,msg:x.msg,max:d.max|0,used:used[d.h]|0})}catch(e){}
       }
       codes=out.sort((a,b)=>b.t-a.t);render();
     }catch(err){list.innerHTML='';const li=document.createElement('li');li.className='empty';li.textContent=errText(err,true);list.appendChild(li)}
@@ -575,6 +599,8 @@ footer{margin-top:40px;text-align:center;font-size:12px;color:rgba(159,195,234,.
       const li=document.createElement('li');
       const b=document.createElement('b');b.textContent=c.code;
       const s=document.createElement('span');s.textContent=c.msg;
+      const n=document.createElement('em');n.className='uses'+(c.max>0&&c.used>=c.max?' done':'');
+      n.textContent='Активаций: '+c.used+' / '+(c.max>0?c.max:'∞')+(c.max>0&&c.used>=c.max?' · закончились':'');
       const del=document.createElement('button');del.type='button';del.className='del';del.textContent='Удалить';
       let timer=null;
       del.addEventListener('click',async()=>{
@@ -583,7 +609,7 @@ footer{margin-top:40px;text-align:center;font-size:12px;color:rgba(159,195,234,.
         try{await (await store()).del(c.h);codes=codes.filter(x=>x.h!==c.h);render();setStatus($('createStatus'),'Код '+c.code+' удалён.','ok')}
         catch(err){del.disabled=false;del.classList.remove('armed');del.textContent='Удалить';setStatus($('createStatus'),errText(err,true),'err')}
       });
-      li.append(b,del,s);list.appendChild(li);
+      li.append(b,del,s,n);list.appendChild(li);
     });
   }
 
@@ -594,18 +620,20 @@ footer{margin-top:40px;text-align:center;font-size:12px;color:rgba(159,195,234,.
     if(code.length<3){setStatus(stat,'Код должен быть не короче 3 символов.','err');shake($('createForm'));return}
     if(!/^[A-ZА-ЯЁ0-9_-]+$/.test(code)){setStatus(stat,'В коде можно использовать только буквы, цифры, - и _.','err');shake($('createForm'));return}
     if(!msg){setStatus(stat,'Напиши сообщение для этого кода.','err');shake($('createForm'));return}
+    const maxRaw=$('newMax').value.trim();const max=maxRaw?Math.floor(Number(maxRaw)):0;
+    if(maxRaw&&(!Number.isFinite(max)||max<1||max>1000000)){setStatus(stat,'Количество активаций — целое число от 1 до 1 000 000, или оставь поле пустым.','err');shake($('createForm'));return}
     const btn=e.submitter||$('createForm').querySelector('[type=submit]');btn.disabled=true;
     setStatus(stat,'Сохраняем…');
     try{
       const h=await idOf(code);
       const pub=await seal(await keyFrom(code,'mrblox-code'),msg);
       const adm=await seal(adminKey,JSON.stringify({code,msg}));
-      const doc={h,iv:pub.iv,ct:pub.ct,aiv:adm.iv,act:adm.ct,t:Date.now()};
+      const doc={h,iv:pub.iv,ct:pub.ct,aiv:adm.iv,act:adm.ct,t:Date.now(),max};
       await (await store()).put(h,doc);
       const existed=codes.some(c=>c.h===h);
-      codes=[{h,t:doc.t,code,msg}].concat(codes.filter(c=>c.h!==h));render();
-      setStatus(stat,(existed?'Код '+code+' обновлён.':'Код '+code+' создан.')+' Его можно вводить во вкладке «Промокоды».','ok');
-      $('newCode').value='';$('newMsg').value='';
+      codes=[{h,t:doc.t,code,msg,max,used:0}].concat(codes.filter(c=>c.h!==h));render();
+      setStatus(stat,(existed?'Код '+code+' обновлён.':'Код '+code+' создан.')+(max?' Активаций: '+max+'.':' Без ограничений.')+' Его можно вводить во вкладке «Промокоды».','ok');
+      $('newCode').value='';$('newMsg').value='';$('newMax').value='';
     }catch(err){setStatus(stat,errText(err,true),'err')}
     finally{btn.disabled=false}
   });

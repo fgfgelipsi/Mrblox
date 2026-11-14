@@ -4,6 +4,7 @@ const crypto = require('crypto');
 
 const ADMIN_HASH = '0cde394567bb8dfb79a5b1acfa1692b665114ea009042973b664b731daca40f5';
 const KEY = 'mrblox:codes';
+const USED = 'mrblox:used';
 const HEX64 = /^[a-f0-9]{64}$/;
 
 // Находит адрес и токен базы при любом префиксе, который Vercel дал переменным
@@ -55,10 +56,19 @@ module.exports = async (req, res) => {
   try {
     const h = req.query && typeof req.query.h === 'string' ? req.query.h : '';
 
+    // Активация кода посетителем: каждый успешный запрос тратит одну активацию.
     if (req.method === 'GET' && h) {
       if (!HEX64.test(h)) return res.status(400).json({ error: 'bad_code' });
       const v = await redis(['HGET', KEY, h]);
-      return res.status(200).json({ doc: v ? JSON.parse(v) : null });
+      if (!v) return res.status(200).json({ doc: null });
+      const d = JSON.parse(v);
+      const max = Number(d.max) || 0;
+      const used = await redis(['HINCRBY', USED, h, 1]);
+      if (max > 0 && used > max) {
+        await redis(['HINCRBY', USED, h, -1]);
+        return res.status(200).json({ doc: null, exhausted: true });
+      }
+      return res.status(200).json({ doc: { iv: d.iv, ct: d.ct }, used, max });
     }
 
     if (!isAdmin(req)) return res.status(401).json({ error: 'auth' });
@@ -69,21 +79,27 @@ module.exports = async (req, res) => {
       for (let i = 1; i < flat.length; i += 2) {
         try { docs.push(JSON.parse(flat[i])); } catch (e) {}
       }
-      return res.status(200).json({ docs });
+      const uflat = (await redis(['HGETALL', USED])) || [];
+      const used = {};
+      for (let i = 0; i < uflat.length; i += 2) used[uflat[i]] = Number(uflat[i + 1]) || 0;
+      return res.status(200).json({ docs, used });
     }
 
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
       if (!HEX64.test(body.h || '') || !validDoc(body.doc)) return res.status(400).json({ error: 'bad_doc' });
       const d = body.doc;
-      const doc = { h: body.h, iv: d.iv, ct: d.ct, aiv: d.aiv, act: d.act, t: Number(d.t) || Date.now() };
+      const max = Math.max(0, Math.min(1000000, Math.floor(Number(d.max) || 0)));
+      const doc = { h: body.h, iv: d.iv, ct: d.ct, aiv: d.aiv, act: d.act, t: Number(d.t) || Date.now(), max };
       await redis(['HSET', KEY, body.h, JSON.stringify(doc)]);
+      await redis(['HDEL', USED, body.h]); // новый или обновлённый код начинает счёт заново
       return res.status(200).json({ ok: true });
     }
 
     if (req.method === 'DELETE') {
       if (!HEX64.test(h)) return res.status(400).json({ error: 'bad_code' });
       await redis(['HDEL', KEY, h]);
+      await redis(['HDEL', USED, h]);
       return res.status(200).json({ ok: true });
     }
 
