@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Базы от MRblox — Steal a Brainrot</title>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Lobster&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -20,39 +20,45 @@
     background: url('/bazy/bg.jpg') center / cover no-repeat, #b8c5d3;
   }
 
-  .logo { text-align: center; line-height: 1; margin-bottom: 10px; }
+  .logo { text-align: center; line-height: 1.05; margin-bottom: 10px; isolation: isolate; font-family: 'Lobster', cursive; }
+  .logo div { position: relative; display: inline-block; }
+  .logo div::before {
+    content: attr(data-text);
+    position: absolute; inset: 0; z-index: -1;
+    -webkit-text-stroke: 7px #9e0a1e;
+    color: #9e0a1e;
+    text-shadow: 0 5px 14px rgba(120,0,20,.35);
+  }
   .t1 {
-    font-weight: 800;
-    font-size: clamp(22px, 6vw, 40px);
-    color: #3d5470;
-    letter-spacing: 2px;
+    font-size: clamp(28px, 7vw, 46px);
+    color: #fff;
   }
   .t2 {
-    font-weight: 900;
-    font-size: clamp(44px, 12vw, 84px);
-    color: #1f2b3a;
-    letter-spacing: 1px;
-    text-shadow: 0 4px 16px rgba(255,255,255,.7);
+    font-size: clamp(52px, 14vw, 96px);
+    background: repeating-linear-gradient(135deg, #e3001b 0 10px, #ffffff 10px 20px);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    padding: 0 6px;
   }
 
-  .game { font-size: 16px; font-weight: 700; color: #4f6580; margin: 4px 0 18px; text-align: center; }
+  .game { font-family: 'Lobster', cursive; font-size: 19px; color: #c8102e; text-shadow: 0 0 6px #fff, 0 0 2px #fff; margin: 4px 0 18px; text-align: center; }
   .banner {
-    font-weight: 800;
-    font-size: clamp(15px, 3.8vw, 19px);
+    font-family: 'Lobster', cursive;
+    font-size: clamp(18px, 4.4vw, 23px);
     color: #fff;
-    background: #e5484d;
+    background: #d0021b;
+    border: 2px dashed rgba(255,255,255,.85);
     border-radius: 999px;
     padding: 9px 26px;
     margin: 0 0 28px;
-    box-shadow: 0 6px 18px -6px rgba(229,72,77,.6);
+    box-shadow: 0 0 0 4px #d0021b, 0 8px 20px -6px rgba(208,2,27,.6);
     text-align: center;
   }
 
   .sale {
-    font-weight: 800;
-    font-size: 12px;
+    font-family: 'Lobster', cursive;
+    font-size: 14px;
     color: #fff;
-    background: #e5484d;
+    background: #d0021b;
     border-radius: 999px;
     padding: 2px 10px;
   }
@@ -82,17 +88,19 @@
 
   .name {
     flex: 1;
-    font-weight: 800;
-    font-size: clamp(18px, 4.4vw, 26px);
-    color: #1f2b3a;
+    font-family: 'Lobster', cursive;
+    font-size: clamp(22px, 5.4vw, 32px);
+    color: #c8102e;
+    text-shadow: 0 2px 0 #fff;
   }
   .price {
-    font-weight: 900;
-    font-size: clamp(24px, 5.4vw, 34px);
-    color: #1f2b3a;
+    font-family: 'Lobster', cursive;
+    font-size: clamp(26px, 6vw, 38px);
+    color: #c8102e;
+    text-shadow: 0 2px 0 #fff;
     white-space: nowrap;
   }
-  .price span { font-size: .55em; color: #4f6580; margin-left: 4px; }
+  .price span { font-size: .6em; color: #c8102e; margin-left: 4px; }
 
   .right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
   .buy {
@@ -101,8 +109,8 @@
     border-radius: 999px;
     background: var(--b);
     color: #fff;
-    font-weight: 800;
-    font-size: 16px;
+    font-family: 'Lobster', cursive;
+    font-size: 19px;
     text-decoration: none;
     box-shadow: 0 6px 14px -6px var(--b);
     transition: transform .15s, filter .15s;
@@ -129,6 +137,7 @@
   .music-btn:active { transform: scale(.94); }
 
   @media (max-width: 480px) {
+    .buy { font-size: 16px; }
     .pic { width: 84px; height: 84px; border-radius: 14px; }
     .row { gap: 12px; padding: 10px 14px 10px 10px; }
     .buy { padding: 7px 16px; font-size: 14px; }
@@ -138,8 +147,8 @@
 <body>
 
   <div class="logo">
-    <div class="t1">БАЗЫ ОТ</div>
-    <div class="t2">MRBLOX</div>
+    <div class="t1" data-text="Базы от">Базы от</div><br>
+    <div class="t2" data-text="MRBLOX">MRBLOX</div>
   </div>
   <div class="game">Steal a Brainrot · Укради Брейнрот</div>
   <div class="banner">🔥 Акция на базы</div>
