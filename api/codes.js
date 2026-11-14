@@ -6,9 +6,24 @@ const ADMIN_HASH = '0cde394567bb8dfb79a5b1acfa1692b665114ea009042973b664b731daca
 const KEY = 'mrblox:codes';
 const HEX64 = /^[a-f0-9]{64}$/;
 
+// Находит адрес и токен базы при любом префиксе, который Vercel дал переменным
+// (KV_REST_API_URL, UPSTASH_REDIS_REST_URL, STORAGE_KV_REST_API_URL и т.п.).
+function findEnv() {
+  const env = process.env;
+  const keys = Object.keys(env);
+  const pairs = [['KV_REST_API_URL', 'KV_REST_API_TOKEN'], ['REDIS_REST_URL', 'REDIS_REST_TOKEN']];
+  for (const [u, t] of pairs) {
+    const uk = keys.find(k => k.endsWith(u) && /^https:\/\//.test(env[k] || ''));
+    if (uk) {
+      const tk = uk.slice(0, -u.length) + t;
+      if (env[tk]) return { url: env[uk], token: env[tk] };
+    }
+  }
+  return { url: '', token: '' };
+}
+
 async function redis(cmd) {
-  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  const { url, token } = findEnv();
   if (!url || !token) { const e = new Error('no_db'); e.status = 503; throw e; }
   const r = await fetch(url, {
     method: 'POST',
